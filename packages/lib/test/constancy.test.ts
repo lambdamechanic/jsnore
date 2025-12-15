@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { MISSING, evaluateConstancy, gatherInstanceValues, type JsonMaskSegment } from "../src/index.js";
+import {
+  MISSING,
+  evaluateConstancy,
+  gatherInstanceValues,
+  isPathConstant,
+  type JsonMaskSegment
+} from "../src/index.js";
 
 function key(key: string): JsonMaskSegment {
   return { type: "key", key };
@@ -85,5 +91,26 @@ describe("evaluateConstancy", () => {
 
   test("returns non-constant when there are zero hits", () => {
     expect(evaluateConstancy({}, [wildcard()], 0)).toEqual({ constant: false, hits: 0 });
+  });
+});
+
+describe("isPathConstant", () => {
+  test("returns false when there are zero hits", () => {
+    expect(isPathConstant({}, [wildcard()], 0)).toBe(false);
+  });
+
+  test("returns false when hits < minHits", () => {
+    const input = [{ b: 1 }, { b: 1 }];
+    expect(isPathConstant(input, [index(), key("b")], 3)).toBe(false);
+  });
+
+  test("returns false when missing is mixed with present", () => {
+    const input = [{ b: 1 }, {}, { b: 1 }];
+    expect(isPathConstant(input, [index(), key("b")], 3)).toBe(false);
+  });
+
+  test("returns true when all values equal and hits >= minHits", () => {
+    const input = [{ b: { x: 1 } }, { b: { x: 1 } }, { b: { x: 1 } }];
+    expect(isPathConstant(input, [index(), key("b")], 3)).toBe(true);
   });
 });

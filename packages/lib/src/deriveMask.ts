@@ -1,12 +1,82 @@
 import type { JsonMaskSegment } from "./segments.js";
 import { enumerateNodes } from "./enumerate.js";
 import { generateWildcardCandidates } from "./candidates.js";
-import { evaluateConstancy } from "./constancy.js";
+import { isPathConstant } from "./constancy.js";
 import { renderJsonMaskFromPaths } from "./renderMask.js";
 
 export type DeriveMaskOptions = {
   minHits?: number;
 };
+
+type ConstantPrefixNode = {
+  terminal: boolean;
+  keys: Map<string, ConstantPrefixNode>;
+  wildcard?: ConstantPrefixNode;
+  index?: ConstantPrefixNode;
+};
+
+function createConstantPrefixNode(): ConstantPrefixNode {
+  return { terminal: false, keys: new Map() };
+}
+
+function addConstantCandidatePrefix(root: ConstantPrefixNode, candidate: JsonMaskSegment[]): void {
+  let node = root;
+  for (const segment of candidate) {
+    if (segment.type === "key") {
+      const existing = node.keys.get(segment.key);
+      if (existing) node = existing;
+      else {
+        const next = createConstantPrefixNode();
+        node.keys.set(segment.key, next);
+        node = next;
+      }
+      continue;
+    }
+    if (segment.type === "index") {
+      node.index ??= createConstantPrefixNode();
+      node = node.index;
+      continue;
+    }
+    node.wildcard ??= createConstantPrefixNode();
+    node = node.wildcard;
+  }
+  node.terminal = true;
+}
+
+function isCandidateCoveredByConstantPrefix(
+  root: ConstantPrefixNode,
+  candidate: JsonMaskSegment[]
+): boolean {
+  let current = new Set<ConstantPrefixNode>([root]);
+
+  for (const segment of candidate) {
+    for (const node of current) if (node.terminal) return true;
+
+    const next = new Set<ConstantPrefixNode>();
+    for (const node of current) {
+      if (segment.type === "index") {
+        if (node.index) next.add(node.index);
+        continue;
+      }
+
+      if (segment.type === "key") {
+        const byKey = node.keys.get(segment.key);
+        if (byKey) next.add(byKey);
+        if (node.wildcard) next.add(node.wildcard);
+        continue;
+      }
+
+      // wildcard segment
+      if (node.wildcard) next.add(node.wildcard);
+    }
+
+    if (next.size === 0) return false;
+    current = next;
+  }
+
+  for (const node of current) if (node.terminal) return true;
+  return false;
+}
 
 export function matchesPrefix(candidate: JsonMaskSegment[], concrete: JsonMaskSegment[]): boolean {
   if (candidate.length > concrete.length) return false;
@@ -46,9 +116,14 @@ export function deriveMask(doc: unknown, options: DeriveMaskOptions = {}): strin
     .filter((path) => path.length > 0);
 
   const candidates = generateWildcardCandidates(allPaths);
-  const constantCandidates = candidates.filter(
-    (candidate) => evaluateConstancy(doc, candidate, minHits).constant
-  );
+  const constantCandidates: JsonMaskSegment[][] = [];
+  const constantPrefixTrie = createConstantPrefixNode();
+  for (const candidate of candidates) {
+    if (isCandidateCoveredByConstantPrefix(constantPrefixTrie, candidate)) continue;
+    if (!isPathConstant(doc, candidate, minHits)) continue;
+    constantCandidates.push(candidate);
+    addConstantCandidatePrefix(constantPrefixTrie, candidate);
+  }
 
   const keep = nodes
     .filter((node) => node.kind === "leaf")
