@@ -116,12 +116,10 @@ export function deriveMask(doc: unknown, options: DeriveMaskOptions = {}): strin
     .filter((path) => path.length > 0);
 
   const candidates = generateWildcardCandidates(allPaths);
-  const constantCandidates: JsonMaskSegment[][] = [];
   const constantPrefixTrie = createConstantPrefixNode();
   for (const candidate of candidates) {
     if (isCandidateCoveredByConstantPrefix(constantPrefixTrie, candidate)) continue;
     if (!isPathConstant(doc, candidate, minHits)) continue;
-    constantCandidates.push(candidate);
     addConstantCandidatePrefix(constantPrefixTrie, candidate);
   }
 
@@ -130,7 +128,7 @@ export function deriveMask(doc: unknown, options: DeriveMaskOptions = {}): strin
     .map((node) => node.path)
     .filter((path) => {
       if (path.length === 0) return false;
-      return !constantCandidates.some((candidate) => matchesPrefix(candidate, path));
+      return !isCandidateCoveredByConstantPrefix(constantPrefixTrie, path);
     })
     .map(normalizePathForRender)
     .filter((path) => path.length > 0);
