@@ -134,15 +134,5 @@ export function deriveMask(doc: unknown, options: DeriveMaskOptions = {}): strin
     .filter((path) => path.length > 0);
 
   if (keep.length === 0) return "";
-
-  const deduped: JsonMaskSegment[][] = [];
-  const seen = new Set<string>();
-  for (const path of keep) {
-    const key = JSON.stringify(path);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(path);
-  }
-
-  return renderJsonMaskFromPaths(deduped);
+  return renderJsonMaskFromPaths(keep);
 }

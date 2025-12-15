@@ -1,7 +1,16 @@
 import type { JsonMaskSegment } from "./segments.js";
 
-function serializePath(path: JsonMaskSegment[]): string {
-  return JSON.stringify(path);
+function segmentKey(segment: JsonMaskSegment): string {
+  if (segment.type === "index") return "i";
+  if (segment.type === "wildcard") return "*";
+  return `k${segment.key.length}:${segment.key}`;
+}
+
+function pathKey(path: JsonMaskSegment[]): string {
+  if (path.length === 0) return "";
+  let out = "";
+  for (const segment of path) out += `/${segmentKey(segment)}`;
+  return out;
 }
 
 type TrieNode = {
@@ -44,7 +53,7 @@ function buildTrie(paths: JsonMaskSegment[][]): TrieNode {
 
 export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMaskSegment[][] {
   const seen = new Set<string>();
-  const candidates: JsonMaskSegment[][] = [];
+  const candidates: Array<{ path: JsonMaskSegment[]; key: string }> = [];
 
   const trie = buildTrie(paths);
 
@@ -56,10 +65,10 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
     const visit = (pos: number, nodeSet: TrieNode[]): void => {
       if (pos >= path.length) {
         const candidate = working.slice();
-        const key = serializePath(candidate);
+        const key = pathKey(candidate);
         if (seen.has(key)) return;
         seen.add(key);
-        candidates.push(candidate);
+        candidates.push({ path: candidate, key });
         return;
       }
 
@@ -116,9 +125,10 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
   }
 
   candidates.sort((a, b) => {
-    if (a.length !== b.length) return a.length - b.length;
-    return serializePath(a).localeCompare(serializePath(b));
+    if (a.path.length !== b.path.length) return a.path.length - b.path.length;
+    if (a.key === b.key) return 0;
+    return a.key < b.key ? -1 : 1;
   });
 
-  return candidates;
+  return candidates.map((c) => c.path);
 }
