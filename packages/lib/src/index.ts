@@ -22,3 +22,4 @@ export {
 export { buildMaskTree, createMaskTree, addPathToMaskTree, type MaskTree } from "./maskTree.js";
 export { renderJsonMask, renderJsonMaskFromPaths } from "./renderMask.js";
 export { deriveMask, type DeriveMaskOptions } from "./deriveMask.js";
+export { anonymizeJson, createAnonymizer, type AnonymizeOptions, type Anonymizer } from "./anonymize.js";

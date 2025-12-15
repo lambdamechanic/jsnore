@@ -40,6 +40,11 @@ describe("generateWildcardCandidates", () => {
     expect(generateWildcardCandidates([[]])).toEqual([[]]);
   });
 
+  test("handles already-generalized segments without branching", () => {
+    const out = generateWildcardCandidates([[wildcard(), key("a")]]);
+    expect(out).toEqual([[wildcard(), key("a")]]);
+  });
+
   test("sorts candidates by length first", () => {
     const out = generateWildcardCandidates([[key("a"), key("b")], [key("a")]]);
     expect(out[0]).toEqual([key("a")]);

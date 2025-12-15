@@ -9,9 +9,10 @@
     "build": "tsc -b",
     "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",
     "test": "npm run build --silent && vitest run",
-    "test:coverage": "npm run build --silent && (cd packages/lib && vitest run --coverage) && (cd packages/cli && vitest run --coverage)",
+    "test:coverage": "npm run build --silent && (cd packages/lib && vitest run --coverage) && (cd packages/cli && vitest run --coverage) && (cd packages/jsonymous && vitest run --coverage)",
     "test:prop": "tsx packages/lib/property/run.ts",
     "cli": "node packages/cli/dist/bin.js",
+    "jsonymous": "node packages/jsonymous/dist/bin.js",
     "cli:dev": "npm run build --silent && tsx packages/cli/src/bin.ts"
   },
   "devDependencies": {

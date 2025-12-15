@@ -1,5 +1,8 @@
 import type { JsonMaskSegment } from "./segments.js";
 
+type ConcreteSegment = Extract<JsonMaskSegment, { type: "key" | "index" }>;
+type ConcretePath = ConcreteSegment[];
+
 function segmentKey(segment: JsonMaskSegment): string {
   if (segment.type === "index") return "i";
   if (segment.type === "wildcard") return "*";
@@ -22,7 +25,11 @@ function createTrieNode(): TrieNode {
   return { keys: new Map() };
 }
 
-function buildTrie(paths: JsonMaskSegment[][]): TrieNode {
+function isConcretePath(path: JsonMaskSegment[]): path is ConcretePath {
+  return path.every((segment) => segment.type === "key" || segment.type === "index");
+}
+
+function buildTrie(paths: ConcretePath[]): TrieNode {
   const root = createTrieNode();
 
   for (const path of paths) {
@@ -32,11 +39,6 @@ function buildTrie(paths: JsonMaskSegment[][]): TrieNode {
         node.index ??= createTrieNode();
         node = node.index;
         continue;
-      }
-      if (segment.type !== "key") {
-        // When passed already-generalized paths, fall back to treating these segments as opaque.
-        // The primary production input to this function is concrete paths (keys + indices).
-        break;
       }
       const existing = node.keys.get(segment.key);
       if (existing) node = existing;
@@ -55,10 +57,21 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
   const seen = new Set<string>();
   const candidates: Array<{ path: JsonMaskSegment[]; key: string }> = [];
 
-  const trie = buildTrie(paths);
+  const concretePaths = paths.filter(isConcretePath);
+  const trie = buildTrie(concretePaths);
 
   for (const path of paths) {
-    const working = path.slice();
+    if (!isConcretePath(path)) {
+      const candidate = path.slice();
+      const key = pathKey(candidate);
+      if (!seen.has(key)) {
+        seen.add(key);
+        candidates.push({ path: candidate, key });
+      }
+      continue;
+    }
+
+    const working: JsonMaskSegment[] = path.slice();
 
     // Track the set of trie nodes this prefix pattern can match.
     // Use arrays (not Set) to reduce overhead and keep signatures deterministic.
@@ -77,26 +90,17 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
       if (segment.type === "index") {
         const nextNodes: TrieNode[] = [];
         for (const node of nodeSet) if (node.index) nextNodes.push(node.index);
-        if (nextNodes.length === 0) return;
         working[pos] = segment;
         visit(pos + 1, nextNodes);
         return;
       }
-
-      if (segment.type !== "key") {
-        // This generator primarily targets concrete paths. For already-generalized paths,
-        // keep the segment and continue without branching.
-        working[pos] = segment;
-        visit(pos + 1, nodeSet);
-        return;
-      }
+      // `path` is a concrete path, so non-index segments are keys.
 
       const keepNodes: TrieNode[] = [];
       for (const node of nodeSet) {
         const child = node.keys.get(segment.key);
         if (child) keepNodes.push(child);
       }
-      if (keepNodes.length === 0) return;
 
       working[pos] = segment;
       visit(pos + 1, keepNodes);
@@ -114,7 +118,6 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
 
       const wildcardNodes: TrieNode[] = [];
       for (const node of nodeSet) for (const child of node.keys.values()) wildcardNodes.push(child);
-      if (wildcardNodes.length === 0) return;
 
       working[pos] = { type: "wildcard" };
       visit(pos + 1, wildcardNodes);
@@ -126,7 +129,6 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
 
   candidates.sort((a, b) => {
     if (a.path.length !== b.path.length) return a.path.length - b.path.length;
-    if (a.key === b.key) return 0;
     return a.key < b.key ? -1 : 1;
   });
 

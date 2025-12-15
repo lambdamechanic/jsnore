@@ -19,10 +19,9 @@ We need a safe way to share real-world JSON for debugging and testing without ex
 - Non-goal: streaming JSON parsing (input is a single JSON document).
 
 ## Open Questions
-- CLI packaging: new `jsnore-anonymize` bin vs `jsnore anonymize` subcommand. (Proposal leans toward a separate bin.)
+CLI packaging is a separate bin named `jsonymous`.
 
 ## Impact
 - New OpenSpec capabilities:
   - `anonymize-json` (library)
   - `json-anonymize-cli` (CLI)
-

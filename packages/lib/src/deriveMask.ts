@@ -72,24 +72,21 @@ function isCandidateCoveredByConstantPrefix(
 
     if (next.length === 0) return false;
 
-    // Deduplicate without Set: keep only unique node references.
-    // This is typically small (bounded by branching in constant-prefix trie).
-    if (next.length > 1) {
-      for (let i = 0; i < next.length; i += 1) {
-        const node = next[i]!;
-        for (let j = i + 1; j < next.length; ) {
-          if (next[j] === node) next.splice(j, 1);
-          else j += 1;
-        }
-      }
-    }
-
     current = next;
     next = [];
   }
 
   for (const node of current) if (node.terminal) return true;
   return false;
+}
+
+export function __testIsCandidateCoveredByConstantPrefix(
+  constantPrefixes: JsonMaskSegment[][],
+  candidate: JsonMaskSegment[]
+): boolean {
+  const trie = createConstantPrefixNode();
+  for (const prefix of constantPrefixes) addConstantCandidatePrefix(trie, prefix);
+  return isCandidateCoveredByConstantPrefix(trie, candidate);
 }
 
 export function matchesPrefix(candidate: JsonMaskSegment[], concrete: JsonMaskSegment[]): boolean {

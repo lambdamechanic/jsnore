@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { deriveMask } from "../src/index.js";
-import { matchesPrefix, normalizePathForRender } from "../src/deriveMask.js";
+import {
+  __testIsCandidateCoveredByConstantPrefix,
+  matchesPrefix,
+  normalizePathForRender
+} from "../src/deriveMask.js";
 
 describe("deriveMask", () => {
   test("uses a default minHits of 5", () => {
@@ -56,6 +60,16 @@ describe("deriveMask", () => {
   test("returns empty mask for primitive roots (no keepable paths)", () => {
     expect(deriveMask(123, { minHits: 1 })).toBe("");
   });
+
+  test("can treat wildcarded key segments as constant (covers wildcard constant prefix logic)", () => {
+    const doc = {
+      a: { x: 1, keep: "a" },
+      b: { x: 1, keep: "b" }
+    };
+
+    // With minHits 2, `*/x` is constant but single-hit container paths like `a` are not.
+    expect(deriveMask(doc, { minHits: 2 })).toBe("a/keep,b/keep");
+  });
 });
 
 describe("deriveMask internal helpers", () => {
@@ -89,5 +103,38 @@ describe("deriveMask internal helpers", () => {
     expect(
       normalizePathForRender([{ type: "index" }, { type: "index" }, { type: "key", key: "a" }])
     ).toEqual([{ type: "key", key: "a" }]);
+  });
+
+  test("__testIsCandidateCoveredByConstantPrefix can return false for prefix candidates", () => {
+    expect(
+      __testIsCandidateCoveredByConstantPrefix(
+        [[{ type: "key", key: "a" }, { type: "key", key: "b" }]],
+        [{ type: "key", key: "a" }]
+      )
+    ).toBe(false);
+  });
+
+  test("__testIsCandidateCoveredByConstantPrefix handles branching (covers dedupe path)", () => {
+    expect(
+      __testIsCandidateCoveredByConstantPrefix(
+        [
+          [{ type: "key", key: "a" }],
+          [{ type: "wildcard" }, { type: "key", key: "x" }]
+        ],
+        [{ type: "key", key: "a" }, { type: "key", key: "x" }]
+      )
+    ).toBe(true);
+  });
+
+  test("__testIsCandidateCoveredByConstantPrefix reuses existing nodes for shared prefixes", () => {
+    expect(
+      __testIsCandidateCoveredByConstantPrefix(
+        [
+          [{ type: "key", key: "a" }, { type: "key", key: "b" }],
+          [{ type: "key", key: "a" }, { type: "key", key: "c" }]
+        ],
+        [{ type: "key", key: "a" }, { type: "key", key: "b" }, { type: "key", key: "d" }]
+      )
+    ).toBe(true);
   });
 });

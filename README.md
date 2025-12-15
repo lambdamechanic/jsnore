@@ -41,6 +41,16 @@ npm run -s cli -- --pretty input.json
 npm run -s cli -- --compact input.json
 ```
 
+## Anonymizing JSON
+
+`jsonymous` anonymizes a single JSON document by replacing **all string keys** and **all string values** with pseudorandom strings of the **same length**. Conversions are cached within a run so repeated strings map consistently. Numbers and booleans are left unchanged (date strings are treated as strings).
+
+```bash
+cat input.json | jsonymous > anonymized.json
+cat input.json | jsonymous --pretty
+jsonymous --compact input.json
+```
+
 ## Library
 
 ```ts

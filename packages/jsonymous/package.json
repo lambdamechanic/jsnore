@@ -1,0 +1,22 @@
+{
+  "name": "@jsnore/jsonymous",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jsonymous": "./dist/bin.js"
+  },
+  "exports": {
+    ".": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@jsnore/lib": "0.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "vitest": "^3.2.4"
+  }
+}

@@ -113,4 +113,10 @@ describe("isPathConstant", () => {
     const input = [{ b: { x: 1 } }, { b: { x: 1 } }, { b: { x: 1 } }];
     expect(isPathConstant(input, [index(), key("b")], 3)).toBe(true);
   });
+
+  test("object wildcard skips inherited keys", () => {
+    const proto: Record<string, unknown> = { a: 1 };
+    const obj = Object.create(proto) as Record<string, unknown>;
+    expect(isPathConstant(obj, [wildcard()], 0)).toBe(false);
+  });
 });
