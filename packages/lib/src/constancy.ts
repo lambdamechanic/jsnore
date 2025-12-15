@@ -9,6 +9,9 @@ export type ConstancyResult = {
 };
 
 export function isPathConstant(root: unknown, path: JsonMaskSegment[], minHits = 5): boolean {
+  const pathLength = path.length;
+  const deepEqual = isDeepStrictEqual;
+
   let hits = 0;
   let firstValue: unknown = undefined;
   let hasFirstValue = false;
@@ -22,7 +25,7 @@ export function isPathConstant(root: unknown, path: JsonMaskSegment[], minHits =
     const instance = values.pop()!;
     const depth = depths.pop()!;
 
-    if (depth >= path.length) {
+    if (depth >= pathLength) {
       hits += 1;
 
       if (!hasFirstValue) {
@@ -31,64 +34,71 @@ export function isPathConstant(root: unknown, path: JsonMaskSegment[], minHits =
         continue;
       }
 
-      if (firstValue === MISSING || instance === MISSING) {
-        if (firstValue !== instance) return false;
-        continue;
-      }
+      if (firstValue === instance) continue;
 
-      if (!isDeepStrictEqual(firstValue, instance)) return false;
+      if (firstValue === MISSING || instance === MISSING) return false;
+
+      const firstIsObject = firstValue !== null && typeof firstValue === "object";
+      const instanceIsObject = instance !== null && typeof instance === "object";
+      if (!firstIsObject || !instanceIsObject) return false;
+
+      if (!deepEqual(firstValue, instance)) return false;
       continue;
     }
 
+    const nextDepth = depth + 1;
     const segment = path[depth]!;
 
     if (instance === MISSING) {
       values.push(MISSING);
-      depths.push(depth + 1);
+      depths.push(nextDepth);
       continue;
     }
 
+    const isObject = instance !== null && typeof instance === "object";
+    const isInstanceArray = isObject && isArray(instance);
+
     if (segment.type === "key") {
-      if (instance !== null && typeof instance === "object" && !isArray(instance)) {
+      if (isObject && !isInstanceArray) {
         const record = instance as Record<string, unknown>;
         if (hasOwn.call(record, segment.key)) {
           values.push(record[segment.key]);
-          depths.push(depth + 1);
+          depths.push(nextDepth);
         } else {
           values.push(MISSING);
-          depths.push(depth + 1);
+          depths.push(nextDepth);
         }
       } else {
         values.push(MISSING);
-        depths.push(depth + 1);
+        depths.push(nextDepth);
       }
       continue;
     }
 
     if (segment.type === "index") {
-      if (isArray(instance)) {
+      if (isInstanceArray) {
         for (let i = instance.length - 1; i >= 0; i -= 1) {
           values.push(instance[i]);
-          depths.push(depth + 1);
+          depths.push(nextDepth);
         }
       } else {
         values.push(MISSING);
-        depths.push(depth + 1);
+        depths.push(nextDepth);
       }
       continue;
     }
 
     // object wildcard
-    if (instance !== null && typeof instance === "object" && !isArray(instance)) {
+    if (isObject && !isInstanceArray) {
       const record = instance as Record<string, unknown>;
       for (const key in record) {
         if (!hasOwn.call(record, key)) continue;
         values.push(record[key]);
-        depths.push(depth + 1);
+        depths.push(nextDepth);
       }
     } else {
       values.push(MISSING);
-      depths.push(depth + 1);
+      depths.push(nextDepth);
     }
   }
 
@@ -150,6 +160,8 @@ export function evaluateConstancy(
   path: JsonMaskSegment[],
   minHits = 5
 ): ConstancyResult {
+  const deepEqual = isDeepStrictEqual;
+
   const values = gatherInstanceValues(root, path);
   const hits = values.length;
 
@@ -163,7 +175,7 @@ export function evaluateConstancy(
       if (first !== current) return { constant: false, hits };
       continue;
     }
-    if (!isDeepStrictEqual(first, current)) return { constant: false, hits };
+    if (!deepEqual(first, current)) return { constant: false, hits };
   }
 
   return { constant: true, hits, value: first };
