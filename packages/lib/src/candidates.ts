@@ -16,6 +16,11 @@ function pathKey(path: JsonMaskSegment[]): string {
   return out;
 }
 
+function pathKeyFromParts(parts: string[]): string {
+  if (parts.length === 0) return "";
+  return parts.join("");
+}
+
 type TrieNode = {
   keys: Map<string, TrieNode>;
   index?: TrieNode;
@@ -23,6 +28,15 @@ type TrieNode = {
 
 function createTrieNode(): TrieNode {
   return { keys: new Map() };
+}
+
+const nodeSetPool: TrieNode[][] = [];
+function acquireNodeSet(): TrieNode[] {
+  return nodeSetPool.pop() ?? [];
+}
+function releaseNodeSet(nodes: TrieNode[]): void {
+  nodes.length = 0;
+  nodeSetPool.push(nodes);
 }
 
 function isConcretePath(path: JsonMaskSegment[]): path is ConcretePath {
@@ -72,13 +86,19 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
     }
 
     const working: JsonMaskSegment[] = path.slice();
+    const workingKeyParts: string[] = new Array(path.length);
+    for (let i = 0; i < path.length; i += 1) {
+      const segment = path[i]!;
+      if (segment.type === "index") workingKeyParts[i] = "/i";
+      else workingKeyParts[i] = `/k${segment.key.length}:${segment.key}`;
+    }
 
     // Track the set of trie nodes this prefix pattern can match.
     // Use arrays (not Set) to reduce overhead and keep signatures deterministic.
     const visit = (pos: number, nodeSet: TrieNode[]): void => {
       if (pos >= path.length) {
         const candidate = working.slice();
-        const key = pathKey(candidate);
+        const key = pathKeyFromParts(workingKeyParts);
         if (seen.has(key)) return;
         seen.add(key);
         candidates.push({ path: candidate, key });
@@ -88,40 +108,42 @@ export function generateWildcardCandidates(paths: JsonMaskSegment[][]): JsonMask
       const segment = path[pos]!;
 
       if (segment.type === "index") {
-        const nextNodes: TrieNode[] = [];
+        const nextNodes = acquireNodeSet();
         for (const node of nodeSet) if (node.index) nextNodes.push(node.index);
         working[pos] = segment;
         visit(pos + 1, nextNodes);
+        releaseNodeSet(nextNodes);
         return;
       }
       // `path` is a concrete path, so non-index segments are keys.
+      const key = segment.key;
 
-      const keepNodes: TrieNode[] = [];
+      const keepNodes = acquireNodeSet();
+      let wildcardIsRedundant = true;
       for (const node of nodeSet) {
-        const child = node.keys.get(segment.key);
+        const child = node.keys.get(key);
         if (child) keepNodes.push(child);
+        if (!child || node.keys.size !== 1) wildcardIsRedundant = false;
       }
 
       working[pos] = segment;
       visit(pos + 1, keepNodes);
+      releaseNodeSet(keepNodes);
 
       // If wildcarding at this position doesn't broaden the matching set, skip it.
       // This happens when every possible node has exactly one key child and it's the same key.
-      let wildcardIsRedundant = true;
-      for (const node of nodeSet) {
-        if (node.keys.size !== 1 || !node.keys.has(segment.key)) {
-          wildcardIsRedundant = false;
-          break;
-        }
-      }
       if (wildcardIsRedundant) return;
 
-      const wildcardNodes: TrieNode[] = [];
+      const wildcardNodes = acquireNodeSet();
       for (const node of nodeSet) for (const child of node.keys.values()) wildcardNodes.push(child);
 
       working[pos] = { type: "wildcard" };
+      const prevKeyPart = workingKeyParts[pos]!;
+      workingKeyParts[pos] = "/*";
       visit(pos + 1, wildcardNodes);
+      workingKeyParts[pos] = prevKeyPart;
       working[pos] = segment;
+      releaseNodeSet(wildcardNodes);
     };
 
     visit(0, [trie]);
