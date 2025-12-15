@@ -47,31 +47,45 @@ function isCandidateCoveredByConstantPrefix(
   root: ConstantPrefixNode,
   candidate: JsonMaskSegment[]
 ): boolean {
-  let current = new Set<ConstantPrefixNode>([root]);
+  let current: ConstantPrefixNode[] = [root];
+  let next: ConstantPrefixNode[] = [];
 
   for (const segment of candidate) {
     for (const node of current) if (node.terminal) return true;
 
-    const next = new Set<ConstantPrefixNode>();
     for (const node of current) {
       if (segment.type === "index") {
-        if (node.index) next.add(node.index);
+        if (node.index) next.push(node.index);
         continue;
       }
 
       if (segment.type === "key") {
         const byKey = node.keys.get(segment.key);
-        if (byKey) next.add(byKey);
-        if (node.wildcard) next.add(node.wildcard);
+        if (byKey) next.push(byKey);
+        if (node.wildcard) next.push(node.wildcard);
         continue;
       }
 
       // wildcard segment
-      if (node.wildcard) next.add(node.wildcard);
+      if (node.wildcard) next.push(node.wildcard);
     }
 
-    if (next.size === 0) return false;
+    if (next.length === 0) return false;
+
+    // Deduplicate without Set: keep only unique node references.
+    // This is typically small (bounded by branching in constant-prefix trie).
+    if (next.length > 1) {
+      for (let i = 0; i < next.length; i += 1) {
+        const node = next[i]!;
+        for (let j = i + 1; j < next.length; ) {
+          if (next[j] === node) next.splice(j, 1);
+          else j += 1;
+        }
+      }
+    }
+
     current = next;
+    next = [];
   }
 
   for (const node of current) if (node.terminal) return true;
