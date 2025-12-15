@@ -10,28 +10,30 @@ function wildcard(): JsonMaskSegment {
 }
 
 describe("generateWildcardCandidates", () => {
-  test("generates all wildcard combinations for key segments (no max wildcards)", () => {
-    const input = [[key("a"), key("b")]];
+  test("prunes redundant wildcards that don't broaden matching", () => {
+    const input = [
+      [key("a"), key("b")],
+      [key("c"), key("b")]
+    ];
 
     expect(generateWildcardCandidates(input)).toEqual([
       [key("a"), key("b")],
-      [key("a"), wildcard()],
-      [wildcard(), key("b")],
-      [wildcard(), wildcard()]
+      [key("c"), key("b")],
+      [wildcard(), key("b")]
     ]);
   });
 
   test("dedupes and is deterministic across input ordering", () => {
-    const p1 = [key("a"), wildcard(), key("b")];
-    const p2 = [key("a"), wildcard(), key("c")];
+    const p1 = [key("a"), key("b")];
+    const p2 = [key("a"), key("c")];
 
     const out1 = generateWildcardCandidates([p1, p2]);
     const out2 = generateWildcardCandidates([p2, p1]);
 
     expect(out1).toEqual(out2);
-    expect(out1).toContainEqual([wildcard(), wildcard(), wildcard()]);
-    expect(out1).toContainEqual([key("a"), wildcard(), key("b")]);
-    expect(out1).toContainEqual([key("a"), wildcard(), key("c")]);
+    expect(out1).toContainEqual([key("a"), wildcard()]);
+    expect(out1).toContainEqual([key("a"), key("b")]);
+    expect(out1).toContainEqual([key("a"), key("c")]);
   });
 
   test("handles empty paths", () => {
@@ -41,6 +43,6 @@ describe("generateWildcardCandidates", () => {
   test("sorts candidates by length first", () => {
     const out = generateWildcardCandidates([[key("a"), key("b")], [key("a")]]);
     expect(out[0]).toEqual([key("a")]);
-    expect(out[out.length - 1]).toEqual([wildcard(), wildcard()]);
+    expect(out[out.length - 1]).toEqual([key("a"), key("b")]);
   });
 });

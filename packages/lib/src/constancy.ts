@@ -8,75 +8,77 @@ export type ConstancyResult = {
   value?: unknown;
 };
 
-function* iterateInstanceValues(
-  instance: unknown,
-  path: JsonMaskSegment[],
-  depth: number
-): Generator<unknown, void, void> {
-  if (depth >= path.length) {
-    yield instance;
-    return;
-  }
-
-  const segment = path[depth]!;
-
-  if (instance === MISSING) {
-    yield* iterateInstanceValues(MISSING, path, depth + 1);
-    return;
-  }
-
-  if (segment.type === "key") {
-    if (instance !== null && typeof instance === "object" && !Array.isArray(instance)) {
-      const record = instance as Record<string, unknown>;
-      if (Object.prototype.hasOwnProperty.call(record, segment.key)) {
-        yield* iterateInstanceValues(record[segment.key], path, depth + 1);
-      } else {
-        yield* iterateInstanceValues(MISSING, path, depth + 1);
-      }
-    } else {
-      yield* iterateInstanceValues(MISSING, path, depth + 1);
-    }
-    return;
-  }
-
-  if (segment.type === "index") {
-    if (Array.isArray(instance)) {
-      for (const element of instance) yield* iterateInstanceValues(element, path, depth + 1);
-    } else {
-      yield* iterateInstanceValues(MISSING, path, depth + 1);
-    }
-    return;
-  }
-
-  // object wildcard
-  if (instance !== null && typeof instance === "object" && !Array.isArray(instance)) {
-    const record = instance as Record<string, unknown>;
-    for (const key of Object.keys(record)) yield* iterateInstanceValues(record[key], path, depth + 1);
-  } else {
-    yield* iterateInstanceValues(MISSING, path, depth + 1);
-  }
-}
-
 export function isPathConstant(root: unknown, path: JsonMaskSegment[], minHits = 5): boolean {
   let hits = 0;
   let firstValue: unknown = undefined;
   let hasFirstValue = false;
 
-  for (const value of iterateInstanceValues(root, path, 0)) {
-    hits += 1;
+  const stack: Array<{ instance: unknown; depth: number }> = [{ instance: root, depth: 0 }];
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    const { instance, depth } = frame;
 
-    if (!hasFirstValue) {
-      firstValue = value;
-      hasFirstValue = true;
+    if (depth >= path.length) {
+      hits += 1;
+
+      if (!hasFirstValue) {
+        firstValue = instance;
+        hasFirstValue = true;
+        continue;
+      }
+
+      if (firstValue === MISSING || instance === MISSING) {
+        if (firstValue !== instance) return false;
+        continue;
+      }
+
+      if (!isDeepStrictEqual(firstValue, instance)) return false;
       continue;
     }
 
-    if (firstValue === MISSING || value === MISSING) {
-      if (firstValue !== value) return false;
+    const segment = path[depth]!;
+
+    if (instance === MISSING) {
+      stack.push({ instance: MISSING, depth: depth + 1 });
       continue;
     }
 
-    if (!isDeepStrictEqual(firstValue, value)) return false;
+    if (segment.type === "key") {
+      if (instance !== null && typeof instance === "object" && !Array.isArray(instance)) {
+        const record = instance as Record<string, unknown>;
+        if (Object.prototype.hasOwnProperty.call(record, segment.key)) {
+          stack.push({ instance: record[segment.key], depth: depth + 1 });
+        } else {
+          stack.push({ instance: MISSING, depth: depth + 1 });
+        }
+      } else {
+        stack.push({ instance: MISSING, depth: depth + 1 });
+      }
+      continue;
+    }
+
+    if (segment.type === "index") {
+      if (Array.isArray(instance)) {
+        // Preserve order for determinism in early-exit cases.
+        for (let i = instance.length - 1; i >= 0; i -= 1) {
+          stack.push({ instance: instance[i], depth: depth + 1 });
+        }
+      } else {
+        stack.push({ instance: MISSING, depth: depth + 1 });
+      }
+      continue;
+    }
+
+    // object wildcard
+    if (instance !== null && typeof instance === "object" && !Array.isArray(instance)) {
+      const record = instance as Record<string, unknown>;
+      for (const key in record) {
+        if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+        stack.push({ instance: record[key], depth: depth + 1 });
+      }
+    } else {
+      stack.push({ instance: MISSING, depth: depth + 1 });
+    }
   }
 
   if (hits === 0) return false;
