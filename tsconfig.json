@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/lib"
+    },
+    {
+      "path": "./packages/cli"
+    }
+  ]
+}
+

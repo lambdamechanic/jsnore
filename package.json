@@ -1,0 +1,28 @@
+{
+  "name": "jsnore",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",
+    "test": "npm run build --silent && vitest run",
+    "test:coverage": "npm run build --silent && (cd packages/lib && vitest run --coverage) && (cd packages/cli && vitest run --coverage)",
+    "test:prop": "tsx packages/lib/property/run.ts",
+    "cli": "node packages/cli/dist/bin.js",
+    "cli:dev": "npm run build --silent && tsx packages/cli/src/bin.ts"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
+    "minitsis": "^7.0.0",
+    "minitsis-node": "^7.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "json-mask": "^2.0.0"
+  }
+}

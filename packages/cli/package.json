@@ -1,0 +1,16 @@
+{
+  "name": "@jsnore/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jsnore": "./dist/bin.js"
+  },
+  "dependencies": {
+    "@jsnore/lib": "0.0.0",
+    "json-mask": "^2.0.0"
+  },
+  "files": [
+    "dist/"
+  ]
+}
